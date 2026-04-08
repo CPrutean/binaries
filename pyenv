@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+in_array() {
+  local target=$1
+  local -n _in_array_ref=$2
+
+  for i in "${_in_array_ref[@]}"; do
+    if [ "$target" = "$i" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+parse_imports() {
+  if [ $# -ne 2 ]; then
+    echo "Invalid usage of parse_imports pass the sub_modules and defaults found"
+    exit 1
+  fi
+
+  export MODULES_FOUND=()
+  while IFS= read -r fmod; do
+    mod="$(echo "$fmod" | awk '{split($2, a, "."); print a[1]}')"
+    if ! in_array "$mod" "$1" && ! in_array "$mod" "$2" && ! in_array "$mod" MODULES_FOUND; then
+      MODULES_FOUND+=("$mod")
+    fi
+  done < <(grep -rE "^import [a-zA-Z]|^from [a-zA-Z]" . --include="*.py")
+}
+
+create_env() {
+  python3 -m venv venv
+
+  sub_mods=()
+  while IFS= read -r -d '' dir; do
+    if find "$dir" -maxdepth 2 -name "*.py" | grep -q .; then
+      sub_mods+=("$(basename "$dir")")
+    fi
+  done < <(find . -type d -mindepth 2 -print0)
+  echo "found ${#sub_mods[@]} submodules"
+
+  defaults=()
+  while IFS= read -r module; do
+    defaults+=("$module")
+  done < <(python3 -c "import sys; print('\n'.join(sorted(sys.stdlib_module_names)))")
+
+  parse_imports sub_mods defaults
+
+  source venv/bin/activate
+  failed_modules=()
+  pip3 install --upgrade pip
+  waiting_string="Waiting"
+  for module in "${MODULES_FOUND[@]}"; do
+    if pip3 install "$module" >/dev/null 2>&1 && echo "$waiting_string"; then
+      failed_modules+=("$module")
+    fi
+    waiting_string+="."
+  done
+
+  echo "Venv done"
+  echo "Failed to install "
+  echo "${failed_modules[@]}"
+
+}
+
+if [ $# -eq 0 ]; then
+  echo "Pass a valid directory"
+  exit 1
+fi
+
+cd "$1" || {
+  echo "Directory $1 wasnt found"
+  exit 1
+}
+
+file=("venv")
+if [ -e "${file[0]}" ]; then
+  echo "Found venv skipping"
+else
+  create_env
+fi
+
+cat >pyrightconfig.json <<EOF
+{
+  "venvPath": ".",
+  "venv": "venv",
+  "executionEnvironments": [
+    {
+      "root": "."
+    }
+  ]
+}
+EOF

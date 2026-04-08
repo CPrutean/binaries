@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+CODEPATH="/Users/calinprutean/Code/practice/"
+rm "${CODEPATH}main.cpp"
+
+touch "${CODEPATH}main.cpp"
+
+echo "#include <iostream> 
+using std::cout, std::endl;
+
+int main() {
+
+
+  return 0;
+}" >"${CODEPATH}main.cpp"

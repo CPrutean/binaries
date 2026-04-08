@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+CODEPATH="/Users/calinprutean/Code/practice/"
+
+rm "${CODEPATH}main.c"
+touch "${CODEPATH}main.c"
+
+echo "#include <stdlib.h>
+#include <stdio.h>
+
+
+int main() {
+
+
+
+  return 0;
+}" >"${CODEPATH}main.c"

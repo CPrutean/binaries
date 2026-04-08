@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+show_help() {
+  cat <<EOF
+  Usage pfc <container ID/container_name/container IND> <path-to-file> <dest>
+      A utility to copy files from docker containers
+EOF
+}
+
+return_ind() {
+  local -n __IN_ARRAY=$1
+  local __TEST="$2"
+  local -n __OUT=$3
+  for i in "${!__IN_ARRAY[@]}"; do
+    if [[ "${__IN_ARRAY[$i]}" = "$__TEST" ]]; then
+      __OUT=i
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [ $# = 0 ]; then
+  echo "Provide arguments to PFC"
+  exit 1
+elif [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+  show_help
+fi
+
+STR="$(docker ps | tail -n +2)"
+
+IDS=($(echo "$STR" | fields 1))
+NAMES=($(echo "$STR" | fields 2))
+
+case "$1" in
+list_container | -lc)
+  for i in "${!IDS[@]}"; do
+    echo "Index: $i, ID:${IDS[$i]}, NAME: ${NAMES[$i]}"
+  done
+  exit 0
+  ;;
+-ls | ls)
+  id=$(($2))
+  TERM=xterm-256color docker exec -it "${IDS[$id]}" /bin/ls "$3"
+  ;;
+*)
+  ind=255
+  #otherwise keep going through
+  return_ind NAMES "$1" ind
+
+  if [ $ind = 255 ]; then
+    return_ind NAMES "$1" ind
+  fi
+
+  if [ $ind = 255 ]; then
+    ind=$(($1))
+  fi
+
+  docker cp "${IDS[$ind]}":"$2" "$3"
+  exit 0
+  ;;
+esac

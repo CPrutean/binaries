@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+delimiter=' '
+flags=("Fields: a small script that just prints out fields from either a file input or stdin" "    -dl []: delimiter character default ' '")
+
+if [ $# == 0 ]; then
+  echo "Pass the number of the field"
+  exit 1
+fi
+
+init="{print"
+file_name=""
+
+is_digit() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+i=1
+while [ $i -le $# ]; do
+  flag="${!i}"
+  if is_digit "$flag"; then
+    init+=" \$$flag"
+    if ! [ $i = $# ]; then
+      init+=", "
+    fi
+  elif [ "$flag" = "-dl" ]; then
+    i=$((i + 1))
+    delimiter="${!i}"
+  elif [ "$flag" = "-h" ]; then
+    for flag in "${flags[@]}"; do
+      echo "$flag"
+    done
+    exit 0
+  else
+    file_name="${!i}"
+  fi
+
+  i=$((i + 1))
+done
+
+init+="}"
+
+awk "$init" FS="$delimiter" OFS=, "$file_name"
