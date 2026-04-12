@@ -125,26 +125,3 @@ Reset the practice C++ file at `~/Code/practice/main.cpp` to a minimal boilerpla
 ```
 Usage: clearcpp
 ```
-
----
-
-## sshauto
-
-Quick connect to the robotics Orin board at `192.168.0.146` as `trickfire`. Optionally syncs the URC project first.
-
-```
-Usage: sshauto [sync]
-```
-
-- No args: SSH directly.
-- Any arg: runs `sync_to_orin.sh` before connecting.
-
----
-
-## sshdesk
-
-Quick connect to the desktop machine at `100.104.162.5` as `calin`.
-
-```
-Usage: sshdesk
-```
