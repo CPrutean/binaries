@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+YELLOW="\e[33m"
+RED="\e[31m"
+GREEN="\e[32m"
+
+touch ~/.ssh/.sshrc
+
+in_array() {
+  local -n __ARRAY_REF=$1
+  local __TEST="$2"
+  for ent in "${__ARRAY_REF[@]}"; do
+    if [ "$ent" = "$__TEST" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+get_ind() {
+  local -n __ARRAY_REF=$1
+  local __TEST="$2"
+  for i in "${!__ARRAY_REF[@]}"; do
+    if [[ "${__ARRAY_REF[$i]}" = "$__TEST" ]]; then
+      return "${i}"
+    fi
+  done
+  return "255"
+}
+
+FINAL_USER=""
+FINAL_IP=""
+HOSTS=()
+NAMES=()
+DEFAULT_USERS=()
+
+write_file() {
+  echo "" >~/.ssh/.sshrc
+  for i in "${!HOSTS[@]}"; do
+    echo "${HOSTS[$i]} ${NAMES[$i]} ${DEFAULT_USERS[$i]}" >>~/.ssh/.sshrc
+  done
+}
+
+show_help() {
+  cat <<EOF
+Usage: sutil [COMMAND] [OPTIONS]
+
+SSH host manager. Tracks hosts from ~/.ssh/.sshrc and auto-imports new
+entries from ~/.ssh/known_hosts.
+
+Commands:
+  ssh, -s <host>                   Connect to a host by IP or name
+  rename, -rn <host> <name>        Assign or change a host's friendly name
+  default-user, -du <host> <user>  Set the default SSH user for a host
+  user, -u <user>                  Override the SSH user for this session
+  list, -l                         List all known hosts
+  help, -h                         Show this help message
+
+Run 'sutil <command> help' for help on a specific command.
+EOF
+}
+
+#Pass the arg and the value to it
+arg_handler() {
+  case "$1" in
+  #You need to pass old hostname/old host ip then new hostname
+  rename | -rn)
+    if [ "$2" = "help" ] || [ "$2" = "-h" ]; then
+      cat <<EOF
+Usage: sutil rename <host> <new-name>
+       sutil -rn <host> <new-name>
+
+Assign or change the friendly name for a host. Saved to ~/.ssh/.sshrc.
+<host> can be the IP address or the current friendly name.
+
+Examples:
+  sutil rename 192.168.1.10 webserver
+  sutil -rn webserver prod-web
+EOF
+      exit 0
+    fi
+    get_ind HOSTS "$2"
+    idx=$?
+    if [ $idx -ne 255 ]; then
+      NAMES[$idx]="$3"
+      write_file
+      exit 0
+    fi
+    get_ind NAMES "$2"
+    idx=$?
+    if [ $idx -ne 255 ]; then
+      NAMES[$idx]="$3"
+      write_file
+      exit 0
+    fi
+    echo "Invalid hostname or user_ip provide a valid one"
+    exit 1
+    ;;
+
+  #pass a hostname or ip
+  ssh | -s)
+    if [ "$2" = "help" ] || [ "$2" = "-h" ]; then
+      cat <<EOF
+Usage: sutil ssh <host>
+       sutil -s <host>
+
+Connect to a host by its IP address or friendly name using the saved
+default user. Combine with 'user' / '-u' to override the user for
+this session only.
+
+Examples:
+  sutil ssh myserver
+  sutil -s 192.168.1.10
+  sutil -u admin ssh myserver
+EOF
+      exit 0
+    fi
+    get_ind HOSTS "$2"
+    idx=$?
+    if [ $idx -ne 255 ]; then
+      FINAL_IP="${HOSTS[$idx]}"
+      FINAL_USER="${DEFAULT_USERS[$idx]}"
+      return
+    fi
+    get_ind NAMES "$2"
+    idx=$?
+    if [ $idx -ne 255 ]; then
+      FINAL_IP="${HOSTS[$idx]}"
+      FINAL_USER="${DEFAULT_USERS[$idx]}"
+      return
+    fi
+    echo "Invalid hostname or user_ip try again"
+    exit 1
+    ;;
+  #pass the hostname then the default user
+  -du | default-user)
+    if [ "$2" = "help" ] || [ "$2" = "-h" ]; then
+      cat <<EOF
+Usage: sutil default-user <host> <user>
+       sutil -du <host> <user>
+
+Set the default SSH user for a host. Saved to ~/.ssh/.sshrc.
+<host> can be the IP address or the friendly name.
+
+Examples:
+  sutil default-user 192.168.1.10 ubuntu
+  sutil -du myserver root
+EOF
+      exit 0
+    fi
+    get_ind HOSTS "$2"
+    idx=$?
+    if [ $idx -ne 255 ]; then
+      DEFAULT_USERS[$idx]="$3"
+      write_file
+      exit 0
+    fi
+    get_ind NAMES "$2"
+    idx=$?
+    if [ $idx -ne 255 ]; then
+      DEFAULT_USERS[$idx]="$3"
+      write_file
+      exit 0
+    fi
+    echo "Invalid hostname or user_ip try again"
+    exit 1
+
+    ;;
+  #set the user
+  -u | user)
+    if [ "$2" = "help" ] || [ "$2" = "-h" ]; then
+      cat <<EOF
+Usage: sutil user <user> ssh <host>
+       sutil -u <user> -s <host>
+
+Override the SSH user for this session only. Does not change the
+saved default user. Must be combined with the ssh command.
+
+Examples:
+  sutil -u root ssh myserver
+  sutil user admin -s 192.168.1.10
+EOF
+      exit 0
+    fi
+    FINAL_USER="$2"
+    ;;
+  list | -l)
+    if [ "$2" = "help" ] || [ "$2" = "-h" ]; then
+      cat <<EOF
+Usage: sutil list
+       sutil -l
+
+List all known hosts with their friendly name and default user.
+
+Output columns:
+  HOST IP       The IP address of the host
+  NAME          Friendly name (NULL if not set)
+  DEFAULT USER  Default SSH user (NULL if not set)
+EOF
+      exit 0
+    fi
+    printf "%-20s %-20s %-20s\n" "HOST IP" "NAME" "DEFAULT USER"
+    printf "%-20s %-20s %-20s\n" "--------" "----" "------------"
+    for i in "${!HOSTS[@]}"; do
+      printf "%-20s %-20s %-20s\n" "${HOSTS[$i]}" "${NAMES[$i]}" "${DEFAULT_USERS[$i]}"
+    done
+    exit 0
+    ;;
+  *)
+    echo "Invalid args"
+    exit 1
+    ;;
+  esac
+}
+
+# Handle top-level help before loading host data
+if [ $# -eq 0 ] || [ "$1" = "help" ] || [ "$1" = "-h" ]; then
+  show_help
+  exit 0
+fi
+
+while IFS= read -r line; do
+  host_ip="$(echo "$line" | fields 1)"
+  known_host_name="$(echo "$line" | fields 2)"
+  default_user="$(echo "$line" | fields 3)"
+  if ! in_array HOSTS "$host_ip"; then
+    HOSTS+=("$host_ip")
+    NAMES+=("$known_host_name")
+    DEFAULT_USERS+=("$default_user")
+  fi
+done <~/.ssh/.sshrc
+
+while IFS= read -r line; do
+  host_ip="$(echo "$line" | fields 1)"
+  if ! in_array HOSTS "$host_ip"; then
+    echo -e "${YELLOW}[!] New host ip $host_ip found adding to config"
+    echo "$host_ip NULL NULL" >>~/.ssh/.sshrc
+    HOSTS+=("$host_ip")
+    NAMES+=("NULL")
+    DEFAULT_USERS+=("NULL")
+  fi
+done <~/.ssh/known_hosts
+
+args=("$@")
+for i in "${!args[@]}"; do
+  case "${args[$i]}" in
+  rename | -rn)
+    arg_handler "${args[$i]}" "${args[$((i + 1))]}" "${args[$((i + 2))]}"
+    i=$((i + 2))
+    ;;
+  ssh | -s)
+    arg_handler "${args[$i]}" "${args[$((i + 1))]}"
+    i=$((i + 1))
+    ;;
+  -du | default-user)
+    arg_handler "${args[$i]}" "${args[$((i + 1))]}" "${args[$((i + 2))]}"
+    i=$((i + 2))
+    ;;
+  -u | user)
+    arg_handler "${args[$i]}" "${args[$((i + 1))]}"
+    i=$((i + 1))
+    ;;
+  list | -l)
+    arg_handler "${args[$i]}" "${args[$((i + 1))]:-}"
+    ;;
+  esac
+done
+
+write_file
+
+TERM=xterm-256color
+ssh "$FINAL_USER"@"$FINAL_IP"
