@@ -40,4 +40,4 @@ done
 
 init+="}"
 
-awk "$init" FS="$delimiter" OFS=, "$file_name"
+awk "$init" FS="$delimiter" OFS=' ' "$file_name"

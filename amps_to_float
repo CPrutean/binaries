@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+LAST_DIGIT=("F" "E" "D" "C" "B" "A" "9" "8" "7" "6" "5" "4" "3" "2" "1" "0")
+
+index_of() {
+
+  local -n __LOCAL_ARRAY=$1
+  local __TARGET="$2"
+  for i in "${!__LOCAL_ARRAY[@]}"; do
+    if [ "${__LOCAL_ARRAY[$i]}" = "$__TARGET" ]; then
+      return "$((i - 1))"
+    fi
+  done
+  return "255"
+}
+
+while IFS= read -r line; do
+  int_val="$(echo "$line" | tr ',' ' ' | tr -d '[]' | fields 2)"
+  if [ "$int_val" = "0" ]; then
+    continue
+  fi
+  val="$(echo "$int_val" | ./int16_to_float)"
+  address="$(echo "$line" | tr ',' ' ' | fields 1)"
+  offset="${address:0:2}"
+  offset=$((offset - 24))
+  last_digit="${address:2:1}"
+
+  index_of LAST_DIGIT "$last_digit"
+  ind=$?
+  if [ "$ind" = "255" ]; then
+    echo "invalid character"
+    exit 1
+  fi
+
+  can_id=$((offset * 16 + ind))
+
+  echo "motor $can_id has an amp value of: $val"
+done < <(
+  parse_can -t test_translation.txt -f can_test.txt | grep "Motor Status 2" | OFS=',' awk -v OFS="," '{print $2, $11}'
+)
