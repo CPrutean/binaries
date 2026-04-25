@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+# ==============================================================================
+# MyActuator RMD-X8 Motor Configuration Script
+# ==============================================================================
+
+# Your CAN interface (e.g., can0, can1)
+CAN_IF="can1"
+
+# The CAN IDs for your motors (Master -> Motor format: 0x140 + Node ID)
+# Your nodes: 0x15 (21), 0x16 (22), 0x17 (23), 0x18 (24), 0x19 (25), 0x1A (26)
+MOTOR_IDS=("155" "156" "157" "158" "159" "15A")
+
+# ==============================================================================
+# CONFIGURATION TARGETS
+# ==============================================================================
+
+# 1. ACCELERATION LIMIT
+# Range: 100 to 60000 (dps^2). Default is 10000.
+# Lower this to prevent voltage brownouts on heavy robots!
+TARGET_ACCEL=1000
+
+# ==============================================================================
+# HELPER FUNCTIONS
+# ==============================================================================
+
+# Converts a decimal integer into a 4-byte (uint32_t) Little-Endian hex string
+# Example: 1000 -> 0x000003E8 -> "E8030000"
+dec_to_little_endian_uint32() {
+  local dec_val=$1
+  local hex_val=$(printf "%08X" "$dec_val")
+
+  local byte0="${hex_val:6:2}"
+  local byte1="${hex_val:4:2}"
+  local byte2="${hex_val:2:2}"
+  local byte3="${hex_val:0:2}"
+
+  echo "${byte0}${byte1}${byte2}${byte3}"
+}
+
+# ==============================================================================
+# EXECUTION
+# ==============================================================================
+
+echo "Initializing Motor Configuration on $CAN_IF..."
+echo "------------------------------------------------"
+
+# Format the Acceleration Payload (Command 0x43)
+# Command (1 byte) + Null (3 bytes) + Accel Data (4 bytes)
+accel_hex_data=$(dec_to_little_endian_uint32 "$TARGET_ACCEL")
+ACCEL_PAYLOAD="43000000${accel_hex_data}"
+
+for motor_id in "${MOTOR_IDS[@]}"; do
+  echo "Configuring Motor $motor_id..."
+
+  # 1. Send Write Acceleration to RAM and ROM Command
+  echo "  -> Setting Acceleration to $TARGET_ACCEL dps^2 (Payload: $ACCEL_PAYLOAD)"
+  cansend "$CAN_IF" "${motor_id}#${ACCEL_PAYLOAD}"
+
+  # Wait 100ms before hitting the next motor to prevent CAN bus congestion
+  # Especially important on daisy-chained setups!
+  sleep 0.1
+done
+
+echo "------------------------------------------------"
+echo "Configuration complete. Please restart the motors or poll 0x42 to verify."
